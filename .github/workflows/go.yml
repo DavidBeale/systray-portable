@@ -2,9 +2,9 @@ name: Go
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
 
@@ -24,7 +24,7 @@ jobs:
             binary: ./tray_darwin_release
             rawName: tray_darwin_release
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@main
 
     - name: Install gtk3
       if: ${{ matrix.os == 'ubuntu-16.04' }}
