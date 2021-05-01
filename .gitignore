@@ -17,11 +17,6 @@ bin
 pkg
 __debug_bin
 .vscode
-tray_darwin
-tray_darwin_release
-tray_linux
-tray_linux_release
-tray_windows.exe
-tray_windows_release.exe
-tray.exe
-tray
+
+/permuter-systray
+/permuter-systray.exe

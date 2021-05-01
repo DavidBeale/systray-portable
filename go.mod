@@ -1,4 +1,4 @@
-module github.com/felixhao28/systray-portable
+module permuter-systray
 
 go 1.15
 
