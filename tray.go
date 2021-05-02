@@ -189,8 +189,9 @@ func onReady() {
 					icon, err := base64.StdEncoding.DecodeString(item.Icon)
 					if err != nil {
 						fmt.Fprintln(os.Stderr, err)
+					} else {
+						menuItem.SetIcon(icon)
 					}
-					menuItem.SetIcon(icon)
 				}
 				menuItem.Show()
 				for _, child := range item.Items {
