@@ -48,14 +48,12 @@ type Action struct {
 	Type  string `json:"type"`
 	Item  Item   `json:"item"`
 	Menu  Menu   `json:"menu"`
-	SeqID int    `json:"seq_id"`
 }
 
 // ClickEvent for an click event
 type ClickEvent struct {
 	Type       string `json:"type"`
 	Item       Item   `json:"item"`
-	SeqID      int    `json:"seq_id"`
 	InternalID int    `json:"__id"`
 }
 
@@ -166,12 +164,7 @@ func onReady() {
 
 		updateItem := func(action Action) {
 			item := action.Item
-			var seqID int
-			if action.SeqID < 0 {
-				seqID = internalID2SeqID[action.Item.InternalID]
-			} else {
-				seqID = action.SeqID
-			}
+			seqID := internalID2SeqID[action.Item.InternalID]
 			menuItem := items[seqID]
 			rawItems[seqID] = &item
 			if menuItem == nil {
@@ -268,7 +261,7 @@ func onReady() {
 		}(reader)
 
 		stdoutEnc := json.NewEncoder(os.Stdout)
-		// {"type": "update-item", "item": {"title":"aa3","tooltip":"bb","enabled":true,"checked":true}, "__id": 0}
+		// {"type": "update-item", "item": {"title":"aa3","tooltip":"bb","enabled":true,"checked":true, "__id": 0}}
 		for {
 			itemsCnt := 0
 			for _, ch := range items {
@@ -302,7 +295,6 @@ func onReady() {
 				err := stdoutEnc.Encode(ClickEvent{
 					Type:       "clicked",
 					Item:       *rawItems[seqID],
-					SeqID:      seqID,
 					InternalID: seqID2InternalID[seqID],
 				})
 				if err != nil {
