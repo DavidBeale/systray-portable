@@ -15,7 +15,6 @@ import (
 )
 
 func main() {
-	// Should be called at the very beginning of main().
 	systray.Run(onReady, onExit)
 }
 
@@ -53,7 +52,6 @@ type Action struct {
 // ClickEvent for an click event
 type ClickEvent struct {
 	Type       string `json:"type"`
-	Item       Item   `json:"item"`
 	InternalID int    `json:"__id"`
 }
 
@@ -66,8 +64,6 @@ func readJSON(reader *bufio.Reader, v interface{}) error {
 		return fmt.Errorf("Empty line")
 	}
 
-	// fmt.Fprintf(os.Stderr, "got line: %s\n", input)
-
 	lineReader := strings.NewReader(input[0 : len(input)-1])
 	if err := json.NewDecoder(lineReader).Decode(v); err != nil {
 		return err
@@ -76,10 +72,9 @@ func readJSON(reader *bufio.Reader, v interface{}) error {
 	return nil
 }
 
-func addMenuItem(items *[]*systray.MenuItem, rawItems *[]*Item, seqID2InternalID *[]int, internalID2SeqID *map[int]int, item *Item, parent *systray.MenuItem) {
+func addMenuItem(items *[]*systray.MenuItem, seqID2InternalID *[]int, internalID2SeqID *map[int]int, item *Item, parent *systray.MenuItem) {
 	if item.Title == "<SEPARATOR>" {
 		systray.AddSeparator()
-		*rawItems = append(*rawItems, item)
 		*items = append(*items, nil)
 	} else {
 		var menuItem *systray.MenuItem
@@ -108,9 +103,11 @@ func addMenuItem(items *[]*systray.MenuItem, rawItems *[]*Item, seqID2InternalID
 		}
 		for i := 0; i < len(item.Items); i++ {
 			subitem := item.Items[i]
-			addMenuItem(items, rawItems, seqID2InternalID, internalID2SeqID, &subitem, menuItem)
+			addMenuItem(items, seqID2InternalID, internalID2SeqID, &subitem, menuItem)
 		}
-		*rawItems = append(*rawItems, item)
+		if item.Hidden {
+			menuItem.Hide()
+		}
 		*items = append(*items, menuItem)
 	}
 	seqID := len(*items) - 1
@@ -125,7 +122,7 @@ func onReady() {
 		for sig := range signalChannel {
 			switch sig {
 			case os.Interrupt, syscall.SIGTERM:
-				//handle SIGINT, SIGTERM
+				// handle SIGINT, SIGTERM
 				fmt.Fprintln(os.Stderr, "Quit")
 				systray.Quit()
 			default:
@@ -136,7 +133,6 @@ func onReady() {
 
 	// We can manipulate the systray in other goroutines
 	go func() {
-		rawItems := make([]*Item, 0)
 		items := make([]*systray.MenuItem, 0)
 		seqID2InternalID := make([]int, 0)
 		internalID2SeqID := make(map[int]int)
@@ -149,7 +145,6 @@ func onReady() {
 			systray.Quit()
 			return
 		}
-		// fmt.Println("menu", menu)
 
 		icon, err := base64.StdEncoding.DecodeString(menu.Icon)
 		if err != nil {
@@ -166,7 +161,6 @@ func onReady() {
 			item := action.Item
 			seqID := internalID2SeqID[action.Item.InternalID]
 			menuItem := items[seqID]
-			rawItems[seqID] = &item
 			if menuItem == nil {
 				return
 			}
@@ -199,9 +193,8 @@ func onReady() {
 					items[seqID].Show()
 				}
 			}
-			// fmt.Println("Done")
-			// fmt.Printf("Read from channel %#v and received %s\n", items[chosen], value.String())
 		}
+
 		updateMenu := func(action Action) {
 			m := action.Menu
 			if menu.Title != m.Title {
@@ -239,17 +232,10 @@ func onReady() {
 
 		for i := 0; i < len(menu.Items); i++ {
 			item := menu.Items[i]
-			addMenuItem(&items, &rawItems, &seqID2InternalID, &internalID2SeqID, &item, nil)
+			addMenuItem(&items, &seqID2InternalID, &internalID2SeqID, &item, nil)
 		}
 
 		go func(reader *bufio.Reader) {
-			for i := 0; i < len(items); i++ {
-				item := rawItems[i]
-				menuItem := items[i]
-				if menuItem != nil && item.Hidden {
-					menuItem.Hide()
-				}
-			}
 			for {
 				var action Action
 				if err := readJSON(reader, &action); err != nil {
@@ -262,7 +248,6 @@ func onReady() {
 		}(reader)
 
 		stdoutEnc := json.NewEncoder(os.Stdout)
-		// {"type": "update-item", "item": {"title":"aa3","tooltip":"bb","enabled":true,"checked":true, "__id": 0}}
 		for {
 			itemsCnt := 0
 			for _, ch := range items {
@@ -292,10 +277,8 @@ func onReady() {
 					continue
 				}
 				seqID := caseCnt2SeqID[chosen]
-				// menuItem := items[chosen]
 				err := stdoutEnc.Encode(ClickEvent{
 					Type:       "clicked",
-					Item:       *rawItems[seqID],
 					InternalID: seqID2InternalID[seqID],
 				})
 				if err != nil {
