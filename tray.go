@@ -131,160 +131,157 @@ func onReady() {
 		}
 	}()
 
-	// We can manipulate the systray in other goroutines
-	go func() {
-		items := make([]*systray.MenuItem, 0)
-		seqID2InternalID := make([]int, 0)
-		internalID2SeqID := make(map[int]int)
-		fmt.Println(`{"type": "ready"}`)
-		reader := bufio.NewReader(os.Stdin)
+	items := make([]*systray.MenuItem, 0)
+	seqID2InternalID := make([]int, 0)
+	internalID2SeqID := make(map[int]int)
+	fmt.Println(`{"type": "ready"}`)
+	reader := bufio.NewReader(os.Stdin)
 
-		var menu Menu
-		if err := readJSON(reader, &menu); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			systray.Quit()
+	var menu Menu
+	if err := readJSON(reader, &menu); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		systray.Quit()
+		return
+	}
+
+	icon, err := base64.StdEncoding.DecodeString(menu.Icon)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		systray.Quit()
+		return
+	}
+
+	systray.SetIcon(icon)
+	systray.SetTitle(menu.Title)
+	systray.SetTooltip(menu.Tooltip)
+
+	updateItem := func(action Action) {
+		item := action.Item
+		seqID := internalID2SeqID[action.Item.InternalID]
+		menuItem := items[seqID]
+		if menuItem == nil {
 			return
 		}
-
-		icon, err := base64.StdEncoding.DecodeString(menu.Icon)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			systray.Quit()
-			return
-		}
-
-		systray.SetIcon(icon)
-		systray.SetTitle(menu.Title)
-		systray.SetTooltip(menu.Tooltip)
-
-		updateItem := func(action Action) {
-			item := action.Item
-			seqID := internalID2SeqID[action.Item.InternalID]
-			menuItem := items[seqID]
-			if menuItem == nil {
-				return
-			}
-			if item.Hidden {
-				menuItem.Hide()
+		if item.Hidden {
+			menuItem.Hide()
+		} else {
+			if item.Checked {
+				menuItem.Check()
 			} else {
-				if item.Checked {
-					menuItem.Check()
-				} else {
-					menuItem.Uncheck()
-				}
-				if item.Enabled {
-					menuItem.Enable()
-				} else {
-					menuItem.Disable()
-				}
-				menuItem.SetTitle(item.Title)
-				menuItem.SetTooltip(item.Tooltip)
-				if len(item.Icon) > 0 {
-					icon, err := base64.StdEncoding.DecodeString(item.Icon)
-					if err != nil {
-						fmt.Fprintln(os.Stderr, err)
-					} else {
-						menuItem.SetIcon(icon)
-					}
-				}
-				menuItem.Show()
-				for _, child := range item.Items {
-					seqID = internalID2SeqID[child.InternalID]
-					items[seqID].Show()
-				}
+				menuItem.Uncheck()
 			}
-		}
-
-		updateMenu := func(action Action) {
-			m := action.Menu
-			if menu.Title != m.Title {
-				menu.Title = m.Title
-				systray.SetTitle(menu.Title)
+			if item.Enabled {
+				menuItem.Enable()
+			} else {
+				menuItem.Disable()
 			}
-			if menu.Icon != m.Icon && m.Icon != "" {
-				menu.Icon = m.Icon
-				icon, err := base64.StdEncoding.DecodeString(menu.Icon)
+			menuItem.SetTitle(item.Title)
+			menuItem.SetTooltip(item.Tooltip)
+			if len(item.Icon) > 0 {
+				icon, err := base64.StdEncoding.DecodeString(item.Icon)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err)
 				} else {
-					systray.SetIcon(icon)
+					menuItem.SetIcon(icon)
 				}
 			}
-			if menu.Tooltip != m.Tooltip {
-				menu.Tooltip = m.Tooltip
-				systray.SetTooltip(menu.Tooltip)
+			menuItem.Show()
+			for _, child := range item.Items {
+				seqID = internalID2SeqID[child.InternalID]
+				items[seqID].Show()
 			}
 		}
+	}
 
-		update := func(action Action) {
-			switch action.Type {
-			case "update-item":
-				updateItem(action)
-			case "update-menu":
-				updateMenu(action)
-			case "update-item-and-menu":
-				updateItem(action)
-				updateMenu(action)
-			case "exit":
-				systray.Quit()
+	updateMenu := func(action Action) {
+		m := action.Menu
+		if menu.Title != m.Title {
+			menu.Title = m.Title
+			systray.SetTitle(menu.Title)
+		}
+		if menu.Icon != m.Icon && m.Icon != "" {
+			menu.Icon = m.Icon
+			icon, err := base64.StdEncoding.DecodeString(menu.Icon)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			} else {
+				systray.SetIcon(icon)
 			}
 		}
-
-		for i := 0; i < len(menu.Items); i++ {
-			item := menu.Items[i]
-			addMenuItem(&items, &seqID2InternalID, &internalID2SeqID, &item, nil)
+		if menu.Tooltip != m.Tooltip {
+			menu.Tooltip = m.Tooltip
+			systray.SetTooltip(menu.Tooltip)
 		}
+	}
 
-		go func(reader *bufio.Reader) {
-			for {
-				var action Action
-				if err := readJSON(reader, &action); err != nil {
-					fmt.Fprintln(os.Stderr, err)
-					systray.Quit()
-					break
-				}
-				update(action)
-			}
-		}(reader)
+	update := func(action Action) {
+		switch action.Type {
+		case "update-item":
+			updateItem(action)
+		case "update-menu":
+			updateMenu(action)
+		case "update-item-and-menu":
+			updateItem(action)
+			updateMenu(action)
+		case "exit":
+			systray.Quit()
+		}
+	}
 
-		stdoutEnc := json.NewEncoder(os.Stdout)
+	for i := 0; i < len(menu.Items); i++ {
+		item := menu.Items[i]
+		addMenuItem(&items, &seqID2InternalID, &internalID2SeqID, &item, nil)
+	}
+
+	go func(reader *bufio.Reader) {
 		for {
-			itemsCnt := 0
-			for _, ch := range items {
-				if ch != nil {
-					itemsCnt++
-				}
+			var action Action
+			if err := readJSON(reader, &action); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				systray.Quit()
+				break
 			}
-			cases := make([]reflect.SelectCase, itemsCnt)
-			caseCnt2SeqID := make([]int, len(items))
-			itemsCnt = 0
-			for i, ch := range items {
-				if ch == nil {
-					continue
-				}
-				cases[itemsCnt] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch.ClickedCh)}
-				caseCnt2SeqID[itemsCnt] = i
+			update(action)
+		}
+	}(reader)
+
+	stdoutEnc := json.NewEncoder(os.Stdout)
+	for {
+		itemsCnt := 0
+		for _, ch := range items {
+			if ch != nil {
 				itemsCnt++
 			}
+		}
+		cases := make([]reflect.SelectCase, itemsCnt)
+		caseCnt2SeqID := make([]int, len(items))
+		itemsCnt = 0
+		for i, ch := range items {
+			if ch == nil {
+				continue
+			}
+			cases[itemsCnt] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch.ClickedCh)}
+			caseCnt2SeqID[itemsCnt] = i
+			itemsCnt++
+		}
 
-			remaining := len(cases)
-			for remaining > 0 {
-				chosen, _, ok := reflect.Select(cases)
-				if !ok {
-					// The chosen channel has been closed, so zero out the channel to disable the case
-					cases[chosen].Chan = reflect.ValueOf(nil)
-					remaining--
-					continue
-				}
-				seqID := caseCnt2SeqID[chosen]
-				err := stdoutEnc.Encode(ClickEvent{
-					Type:       "clicked",
-					InternalID: seqID2InternalID[seqID],
-				})
-				if err != nil {
-					fmt.Fprintln(os.Stderr, err)
-				}
+		remaining := len(cases)
+		for remaining > 0 {
+			chosen, _, ok := reflect.Select(cases)
+			if !ok {
+				// The chosen channel has been closed, so zero out the channel to disable the case
+				cases[chosen].Chan = reflect.ValueOf(nil)
+				remaining--
+				continue
+			}
+			seqID := caseCnt2SeqID[chosen]
+			err := stdoutEnc.Encode(ClickEvent{
+				Type:       "clicked",
+				InternalID: seqID2InternalID[seqID],
+			})
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
 			}
 		}
-	}()
+	}
 }
