@@ -14,12 +14,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-16.04
-            binary: ./tray_linux_release
-            rawName: tray_linux_release
-          - os: windows-latest
-            binary: .\tray_windows_release.exe
-            rawName: tray_windows_release.exe
           - os: macos-latest
             binary: ./tray_darwin_release
             rawName: tray_darwin_release
