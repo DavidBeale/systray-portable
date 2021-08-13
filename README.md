@@ -1,4 +1,4 @@
-# permuter-systray
+# systray-portable
 
 A portable version of [go systray](https://github.com/getlantern/systray), using stdin/stdout to communicate with other language.
 
